@@ -341,12 +341,23 @@ function errorText(e) {
   return "Ответ не пришёл. Отправьте сообщение ещё раз.";
 }
 
+// Guard against a correction that is about some other, earlier message.
+function fixMatches(text, c) {
+  const words = (t) => String(t).toLowerCase().replace(/[^a-z0-9' ]+/g, " ").split(/\s+/).filter(Boolean);
+  const mine = new Set(words(text));
+  const share = (t) => { const w = words(t); return w.length ? w.filter((x) => mine.has(x)).length / w.length : 1; };
+  const wrong = Array.isArray(c.mistakes) ? c.mistakes.map((m) => m.wrong).filter(Boolean) : [];
+  if (wrong.length && !wrong.some((w) => share(w) >= 0.6)) return false;
+  return share(c.corrected) >= 0.4;
+}
+
 async function ask(userText) {
   busy = true; setStatus(""); renderLog(); updateComposer();
   ctl = new AbortController();
   turns.push({ role: "user", content: userText || "(The learner has just opened the conversation. Greet them briefly, introduce yourself and ask the first question for this topic. There is nothing to correct yet.)" });
   let recent = turns.slice(-16);
   while (recent.length && recent[0].role !== "user") recent = recent.slice(1);
+  if (userText) recent = [...recent.slice(0, -1), { role: "user", content: `<latest_message>${userText}</latest_message>\nCheck only the text inside latest_message for errors; earlier messages were already checked.` }];
   try {
     const data = await callClaude(recent, ctl.signal);
     const reply = String(data.reply || "").trim();
@@ -356,7 +367,7 @@ async function ask(userText) {
       const me = messages[messages.length - 1];
       me.checked = true;
       const c = data.correction;
-      if (c && c.has_error && c.corrected && c.corrected.trim().toLowerCase() !== userText.trim().toLowerCase()) {
+      if (c && c.has_error && c.corrected && c.corrected.trim().toLowerCase() !== userText.trim().toLowerCase() && fixMatches(userText, c)) {
         me.fix = { original: userText, corrected: c.corrected, explanation: c.explanation, mistakes: Array.isArray(c.mistakes) ? c.mistakes : [] };
         P().mistakes.push({ ...me.fix, at: new Date().toISOString() });
         if (P().mistakes.length > 300) P().mistakes.splice(0, P().mistakes.length - 300);
