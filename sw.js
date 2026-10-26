@@ -1,5 +1,5 @@
 // Caches the app shell so it opens offline; conversation requests always go to the network.
-const CACHE = "english-buddy-v1";
+const CACHE = "english-buddy-v2";
 const SHELL = ["./", "index.html", "app.js", "vendor/anthropic.js", "manifest.webmanifest", "icons/icon.svg", "icons/icon-192.png", "icons/icon-512.png"];
 
 self.addEventListener("install", (e) => {

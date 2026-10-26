@@ -132,17 +132,22 @@ function speak(text, rateFactor, onDone) {
 // ---------- Speech recognition ----------
 const SR = window.SpeechRecognition || window.webkitSpeechRecognition;
 let activeRec = null;
-function recognize() {
+function recognize(onInterim) {
   return new Promise((resolve, reject) => {
     if (!SR) return reject("unsupported");
     const rec = new SR();
     activeRec = rec;
     rec.lang = S().accent === "uk" ? "en-GB" : "en-US";
-    rec.maxAlternatives = 5; rec.interimResults = false;
-    let done = false;
-    rec.onresult = (e) => { done = true; resolve(Array.from(e.results[0]).map((a) => ({ text: a.transcript, conf: a.confidence }))); };
-    rec.onerror = (e) => { done = true; reject(e.error || "error"); };
-    rec.onend = () => { activeRec = null; if (!done) reject("no-speech"); };
+    rec.maxAlternatives = 5; rec.interimResults = !!onInterim;
+    let done = false, heard = "";
+    rec.onresult = (e) => {
+      const r = e.results[e.results.length - 1];
+      if (r.isFinal) { done = true; resolve(Array.from(r).map((a) => ({ text: a.transcript.trim(), conf: a.confidence }))); }
+      else { heard = r[0].transcript; onInterim && onInterim(heard); }
+    };
+    rec.onerror = (e) => { if (!done) { done = true; reject(e.error || "error"); } };
+    // Some Android builds end without a final result; keep what was heard so far.
+    rec.onend = () => { activeRec = null; if (!done) { done = true; heard.trim() ? resolve([{ text: heard.trim(), conf: 0 }]) : reject("no-speech"); } };
     try { rec.start(); } catch (err) { reject("error"); }
   });
 }
@@ -346,22 +351,43 @@ $("startBtn").onclick = () => {
 function send(text) {
   const t = (text ?? $("input").value).trim();
   if (!t || !live || busy) return;
-  $("input").value = "";
+  $("input").value = ""; $("alts").hidden = true; updateSendReady(); setStatus("");
   messages.push({ role: "me", text: t });
   ask(t);
 }
 $("sendBtn").onclick = () => send();
 $("input").addEventListener("keydown", (e) => { if (e.key === "Enter" && !e.shiftKey) { e.preventDefault(); send(); } });
 
+function showAlts(base, alts) {
+  const box = $("alts");
+  const seen = new Set([alts[0].text.toLowerCase()]);
+  const others = alts.slice(1).filter((a) => a.text && !seen.has(a.text.toLowerCase()) && seen.add(a.text.toLowerCase())).slice(0, 3);
+  if (!others.length) { box.hidden = true; return; }
+  box.innerHTML = `<span>Или вы сказали:</span>` + others.map((a) => `<button data-alt="${esc(base + a.text)}">${esc(a.text)}</button>`).join("");
+  box.hidden = false;
+}
+$("alts").addEventListener("click", (e) => {
+  const b = e.target.closest("button[data-alt]"); if (!b) return;
+  $("input").value = b.dataset.alt; $("alts").hidden = true; updateSendReady(); $("input").focus();
+});
+function updateSendReady() { $("sendBtn").classList.toggle("ready", !!$("input").value.trim()); }
+$("input").addEventListener("input", updateSendReady);
+
 async function listen() {
   if (listening || !live || busy) return;
   listening = true;
   if (synth) synth.cancel();
-  $("micBtn").classList.add("rec"); $("avatarBox").classList.add("listening"); setStatus("Слушаю…");
+  $("alts").hidden = true;
+  const typed = $("input").value.trim();
+  const base = typed ? typed + " " : "";
+  $("micBtn").classList.add("rec"); $("avatarBox").classList.add("listening"); setStatus("Слушаю… Нажмите микрофон ещё раз, чтобы закончить");
   try {
-    const alts = await recognize();
-    setStatus(""); send(alts[0].text);
-  } catch (err) { setStatus(micError(err)); }
+    const alts = await recognize((t) => { $("input").value = base + t; });
+    $("input").value = base + alts[0].text;
+    updateSendReady();
+    if (S().handsFree) { setStatus(""); send(); }
+    else { showAlts(base, alts); setStatus("Проверьте текст и нажмите «Отправить»"); }
+  } catch (err) { $("input").value = typed; setStatus(micError(err)); }
   listening = false;
   $("micBtn").classList.remove("rec"); $("avatarBox").classList.remove("listening");
 }
