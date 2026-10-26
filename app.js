@@ -487,7 +487,7 @@ $("settingsBtn").onclick = openSettings;
 $("bannerBtn").onclick = openSettings;
 $("settingsDlg").addEventListener("close", () => {
   if ($("settingsDlg").returnValue !== "save") return;
-  app.apiKey = $("apiKey").value.trim(); app.model = $("model").value; app.openaiKey = $("openaiKey").value.trim(); saveApp();
+  app.apiKey = $("apiKey").value.trim(); app.model = $("model").value; app.openaiKey = $("openaiKey").value.trim().startsWith("sk-ant-") ? "" : $("openaiKey").value.trim(); saveApp();
   profiles[0].name = $("name0").value.trim() || profiles[0].name;
   profiles[1].name = $("name1").value.trim() || profiles[1].name;
   saveProfiles(); renderProfiles(); updateBanner();
@@ -505,6 +505,7 @@ $("testKey").onclick = async () => {
 $("testOpenai").onclick = async () => {
   const key = $("openaiKey").value.trim();
   if (!key) { $("testStatus").textContent = "Вставьте ключ OpenAI"; return; }
+  if (key.startsWith("sk-ant-")) { $("testStatus").textContent = "Это ключ Claude, а нужен ключ OpenAI (с platform.openai.com)"; return; }
   $("testStatus").textContent = "Проверяю…";
   try {
     const res = await fetch("https://api.openai.com/v1/models", { headers: { Authorization: "Bearer " + key } });
