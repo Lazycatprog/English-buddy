@@ -1,0 +1,294 @@
+<!doctype html>
+<html lang="ru">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<title>English Buddy</title>
+<meta name="theme-color" content="#0d7a78">
+<link rel="manifest" href="manifest.webmanifest">
+<link rel="icon" href="icons/icon.svg" type="image/svg+xml">
+<link rel="apple-touch-icon" href="icons/icon-192.png">
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Golos+Text:wght@400;500;600&family=Unbounded:wght@500;700&family=Gentium+Book+Plus&display=swap">
+<style>
+/* Layout: app shell with tabs; Talk = avatar + settings column beside the chat, Words = one big flashcard. */
+:root {
+  --bg: #eef2f6; --surface: #ffffff; --surface-2: #f6f8fb; --line: #d6dde6;
+  --ink: #17202c; --muted: #5b6878; --accent: #0d7a78; --accent-ink: #ffffff; --accent-soft: #d9efee;
+  --fix: #b5541c; --fix-soft: #fbeadf; --good: #2c7f45; --good-soft: #e0f1e5; --skin: #f2c9a5;
+  --font-display: "Unbounded", "Golos Text", system-ui, sans-serif;
+  --font-body: "Golos Text", system-ui, -apple-system, "Segoe UI", sans-serif;
+  --font-ipa: "Gentium Book Plus", "Charis SIL", "Doulos SIL", "Times New Roman", serif;
+  color-scheme: light;
+}
+@media (prefers-color-scheme: dark) {
+  :root {
+    --bg: #11161d; --surface: #1a212b; --surface-2: #212a36; --line: #2f3a48;
+    --ink: #e7edf4; --muted: #9aa8b8; --accent: #3cc2bd; --accent-ink: #062322;
+    --accent-soft: #163a3b; --fix: #f0995f; --fix-soft: #3a2619; --good: #6cce8a; --good-soft: #193323;
+    --skin: #e0b48f; color-scheme: dark;
+  }
+}
+* { box-sizing: border-box; }
+html, body { margin: 0; background: var(--bg); color: var(--ink); }
+body { font-family: var(--font-body); font-size: 15px; line-height: 1.5; padding-top: env(safe-area-inset-top, 0px); padding-bottom: env(safe-area-inset-bottom, 0px); }
+[hidden] { display: none !important; }
+.wrap { max-width: 1080px; margin: 0 auto; padding-block: 16px 40px; padding-left: max(16px, env(safe-area-inset-left, 0px)); padding-right: max(16px, env(safe-area-inset-right, 0px)); display: grid; gap: 16px; }
+header { display: flex; flex-wrap: wrap; align-items: center; justify-content: space-between; gap: 10px; }
+h1 { font-family: var(--font-display); font-size: 20px; font-weight: 700; margin: 0; letter-spacing: -0.01em; }
+h1 span { color: var(--accent); }
+.head-right { display: flex; flex-wrap: wrap; gap: 8px; align-items: center; }
+.tabs { display: flex; gap: 4px; background: var(--surface); border: 1px solid var(--line); border-radius: 999px; padding: 4px; }
+.tabs button { border: 0; background: none; color: var(--muted); font: 500 14px var(--font-body); padding: 7px 14px; border-radius: 999px; cursor: pointer; }
+.tabs button[aria-selected="true"] { background: var(--accent); color: var(--accent-ink); }
+button, select, input { font-family: var(--font-body); }
+button:focus-visible, select:focus-visible, textarea:focus-visible, input:focus-visible { outline: 2px solid var(--accent); outline-offset: 2px; }
+#profileSel { width: auto; min-width: 120px; }
+
+.talk { display: grid; grid-template-columns: 300px minmax(0, 1fr); gap: 16px; align-items: start; }
+.panel { background: var(--surface); border: 1px solid var(--line); border-radius: 14px; padding: 16px; }
+.side { display: grid; gap: 14px; }
+.avatar-box { display: grid; justify-items: center; gap: 6px; text-align: center; }
+.avatar-box svg { width: 150px; height: 150px; }
+.avatar-name { font-family: var(--font-display); font-size: 17px; font-weight: 500; }
+.avatar-meta { color: var(--muted); font-size: 13px; }
+#mouth { transform-box: fill-box; transform-origin: center; }
+.talking #mouth { animation: talk 0.22s ease-in-out infinite alternate; }
+@keyframes talk { from { transform: scaleY(0.35); } to { transform: scaleY(1.25); } }
+.eye { transform-box: fill-box; transform-origin: center; animation: blink 5s infinite; }
+@keyframes blink { 0%, 95%, 100% { transform: scaleY(1); } 97% { transform: scaleY(0.1); } }
+.listening .ring { opacity: 1; animation: pulse 1.2s ease-out infinite; }
+.ring { opacity: 0; transform-box: fill-box; transform-origin: center; }
+@keyframes pulse { from { transform: scale(0.92); opacity: 0.9; } to { transform: scale(1.05); opacity: 0; } }
+@media (prefers-reduced-motion: reduce) { .talking #mouth, .eye, .listening .ring { animation: none; } }
+.field { display: grid; gap: 6px; }
+.field > span { font-size: 12px; font-weight: 600; color: var(--muted); text-transform: uppercase; letter-spacing: 0.06em; }
+.seg { display: flex; flex-wrap: wrap; gap: 4px; }
+.seg button { flex: 1 1 auto; min-width: 38px; border: 1px solid var(--line); background: var(--surface-2); color: var(--ink); border-radius: 8px; padding: 6px 8px; font-size: 13px; cursor: pointer; }
+.seg button[aria-pressed="true"] { background: var(--accent-soft); border-color: var(--accent); font-weight: 600; }
+select, input[type="text"], input[type="password"] { width: 100%; padding: 8px 10px; border-radius: 8px; border: 1px solid var(--line); background: var(--surface-2); color: var(--ink); font-size: 14px; }
+.check { display: flex; gap: 8px; align-items: flex-start; font-size: 13.5px; }
+.check input { margin-top: 3px; accent-color: var(--accent); }
+.btn { border: 0; border-radius: 10px; padding: 10px 16px; font: 600 14px var(--font-body); cursor: pointer; background: var(--accent); color: var(--accent-ink); }
+.btn.ghost { background: var(--surface-2); color: var(--ink); border: 1px solid var(--line); }
+.btn.small { padding: 6px 12px; font-size: 13px; }
+.btn:disabled { opacity: 0.5; cursor: default; }
+.row { display: flex; flex-wrap: wrap; gap: 8px; align-items: center; }
+
+.chat { display: grid; grid-template-rows: auto minmax(0, 1fr) auto; min-height: 560px; padding: 0; overflow: hidden; }
+.chat-head { display: flex; flex-wrap: wrap; justify-content: space-between; align-items: center; gap: 8px; padding: 12px 16px; border-bottom: 1px solid var(--line); }
+.status { color: var(--muted); font-size: 13px; }
+.log { padding: 16px; display: flex; flex-direction: column; gap: 12px; overflow-y: auto; max-height: 62vh; min-height: 360px; }
+.msg { max-width: 82%; display: grid; gap: 6px; }
+.msg.bot { align-self: flex-start; }
+.msg.me { align-self: flex-end; justify-items: end; }
+.bubble { padding: 10px 14px; border-radius: 14px; background: var(--surface-2); border: 1px solid var(--line); overflow-wrap: anywhere; }
+.me .bubble { background: var(--accent-soft); border-color: transparent; }
+.bubble .ru { display: block; color: var(--muted); font-size: 13px; margin-top: 4px; }
+.tools { display: flex; flex-wrap: wrap; gap: 4px; }
+.tools button { border: 0; background: none; color: var(--accent); font-size: 12.5px; font-weight: 500; cursor: pointer; padding: 2px 6px; border-radius: 6px; }
+.tools button:hover { background: var(--accent-soft); }
+.fix { background: var(--fix-soft); border-radius: 10px; padding: 8px 12px; font-size: 13.5px; display: grid; gap: 4px; text-align: left; max-width: 100%; }
+.fix b { color: var(--fix); font-weight: 600; }
+.fix del { color: var(--fix); }
+.fix ins { text-decoration: none; color: var(--good); font-weight: 600; }
+.fix .when { color: var(--muted); font-size: 12px; }
+.fix-chip { border: 0; background: var(--fix-soft); color: var(--fix); font-size: 12.5px; font-weight: 600; border-radius: 999px; padding: 3px 10px; cursor: pointer; }
+.ok-chip { color: var(--good); font-size: 12.5px; font-weight: 600; }
+.suggest { display: flex; flex-wrap: wrap; gap: 6px; }
+.suggest button { border: 1px dashed var(--accent); background: none; color: var(--ink); border-radius: 999px; padding: 4px 12px; font-size: 13px; cursor: pointer; }
+.note { align-self: center; color: var(--muted); font-size: 13px; text-align: center; max-width: 560px; }
+.note .report { text-align: left; }
+.typing { color: var(--muted); font-style: italic; }
+.composer { display: flex; gap: 8px; padding: 12px; border-top: 1px solid var(--line); align-items: flex-end; }
+.composer textarea { flex: 1; min-width: 0; resize: none; border: 1px solid var(--line); border-radius: 10px; padding: 10px 12px; font: 15px var(--font-body); background: var(--surface-2); color: var(--ink); min-height: 48px; max-height: 120px; }
+.icon-btn { width: 48px; height: 48px; flex: none; border-radius: 12px; border: 1px solid var(--line); background: var(--surface-2); color: var(--ink); cursor: pointer; display: grid; place-items: center; }
+.icon-btn.mic { background: var(--accent); color: var(--accent-ink); border-color: var(--accent); }
+.icon-btn.rec { background: var(--fix); color: #fff; border-color: var(--fix); }
+.icon-btn svg { width: 22px; height: 22px; }
+.report { display: grid; gap: 8px; }
+.report h3 { margin: 0; font-size: 15px; color: var(--ink); }
+
+.words { display: grid; gap: 16px; }
+.topics { display: flex; flex-wrap: wrap; gap: 6px; }
+.topics button { border: 1px solid var(--line); background: var(--surface); color: var(--ink); border-radius: 999px; padding: 7px 14px; font-size: 14px; cursor: pointer; }
+.topics button[aria-pressed="true"] { background: var(--ink); color: var(--bg); border-color: var(--ink); }
+.card { display: grid; gap: 18px; justify-items: center; text-align: center; padding: 32px 20px; }
+.card .count { color: var(--muted); font-size: 13px; font-variant-numeric: tabular-nums; }
+.card .word { font-family: var(--font-display); font-size: clamp(34px, 9vw, 54px); font-weight: 700; letter-spacing: -0.02em; line-height: 1.1; overflow-wrap: anywhere; }
+.card .ipa { font-family: var(--font-ipa); font-size: 24px; color: var(--accent); }
+.card .ipa small { font-family: var(--font-body); font-size: 12px; color: var(--muted); margin-left: 6px; letter-spacing: 0.06em; }
+.card .tr { font-size: 20px; font-weight: 500; }
+.card .ex { color: var(--muted); max-width: 46ch; }
+.card .ex i { color: var(--ink); font-style: normal; }
+.variant { font-size: 13px; color: var(--muted); background: var(--surface-2); border-radius: 8px; padding: 4px 10px; }
+.score { display: grid; gap: 6px; justify-items: center; min-height: 24px; }
+.meter { width: min(320px, 100%); height: 10px; background: var(--surface-2); border: 1px solid var(--line); border-radius: 999px; overflow: hidden; }
+.meter i { display: block; height: 100%; background: var(--good); width: 0; transition: width 0.4s; }
+.score .num { font-family: var(--font-display); font-size: 26px; font-variant-numeric: tabular-nums; }
+.score .tip { color: var(--muted); font-size: 13.5px; max-width: 46ch; }
+.legend { color: var(--muted); font-size: 12.5px; text-align: center; margin: 0; }
+
+dialog { border: 1px solid var(--line); border-radius: 16px; background: var(--surface); color: var(--ink); padding: 0; width: min(520px, calc(100vw - 32px)); }
+dialog::backdrop { background: rgba(10, 16, 24, 0.45); }
+.dlg { display: grid; gap: 16px; padding: 20px; }
+.dlg h2 { margin: 0; font-family: var(--font-display); font-size: 18px; font-weight: 500; }
+.hint { color: var(--muted); font-size: 13px; margin: 0; }
+.hint a { color: var(--accent); }
+.banner { background: var(--fix-soft); border-radius: 12px; padding: 12px 14px; display: flex; flex-wrap: wrap; gap: 10px; align-items: center; justify-content: space-between; }
+@media (max-width: 760px) {
+  .talk { grid-template-columns: minmax(0, 1fr); }
+  .talk, .side { gap: 10px; }
+  .chat { min-height: 420px; }
+  .log { max-height: 52vh; min-height: 260px; }
+  .msg { max-width: 92%; }
+  .avatar-box { grid-template-columns: 76px minmax(0, 1fr); justify-items: start; text-align: left; column-gap: 14px; row-gap: 2px; padding: 12px; }
+  .avatar-box svg { width: 76px; height: 76px; grid-row: span 3; }
+  .avatar-box .toggle-settings { justify-self: start; margin-top: 4px; }
+  .side-settings { display: none; }
+  .side-settings.open { display: grid; }
+}
+@media (min-width: 761px) { .toggle-settings { display: none; } }
+</style>
+</head>
+<body>
+<div class="wrap">
+  <header>
+    <h1>English <span>Buddy</span></h1>
+    <div class="head-right">
+      <select id="profileSel" aria-label="Кто занимается"></select>
+      <div class="tabs" role="tablist">
+        <button role="tab" id="tab-talk" aria-selected="true" aria-controls="view-talk">Разговор</button>
+        <button role="tab" id="tab-words" aria-selected="false" aria-controls="view-words">Слова</button>
+      </div>
+      <button class="btn ghost small" id="settingsBtn">Настройки</button>
+    </div>
+  </header>
+
+  <div class="banner" id="keyBanner" hidden>
+    <span>Чтобы собеседник отвечал, добавьте ключ API в настройках.</span>
+    <button class="btn small" id="bannerBtn">Открыть настройки</button>
+  </div>
+
+  <section id="view-talk" class="talk" role="tabpanel" aria-labelledby="tab-talk">
+    <aside class="side">
+      <div class="panel avatar-box" id="avatarBox">
+        <svg viewBox="0 0 160 160" aria-hidden="true">
+          <circle cx="80" cy="80" r="78" fill="var(--accent-soft)"/>
+          <circle class="ring" cx="80" cy="80" r="76" fill="none" stroke="var(--fix)" stroke-width="3"/>
+          <g id="hairBack"></g>
+          <ellipse cx="80" cy="86" rx="40" ry="46" fill="var(--skin)"/>
+          <g id="hairFront"></g>
+          <ellipse class="eye" cx="66" cy="84" rx="4.5" ry="5.5" fill="#1d2430"/>
+          <ellipse class="eye" cx="94" cy="84" rx="4.5" ry="5.5" fill="#1d2430"/>
+          <circle cx="60" cy="100" r="5" fill="#e8907a" opacity="0.35"/>
+          <circle cx="100" cy="100" r="5" fill="#e8907a" opacity="0.35"/>
+          <ellipse id="mouth" cx="80" cy="110" rx="9" ry="4.5" fill="#9b3b3b"/>
+          <path id="shirt" d="M140 132 a 40 40 0 0 1 -120 0 q 20 -10 60 -10 q 40 0 60 10z" fill="var(--accent)"/>
+        </svg>
+        <div class="avatar-name" id="avatarName">Emma</div>
+        <div class="avatar-meta" id="avatarMeta"></div>
+        <button class="btn ghost small toggle-settings" id="toggleSettings">Настройки разговора</button>
+      </div>
+
+      <div class="panel side side-settings" id="sideSettings">
+        <div class="field"><span>Уровень</span><div class="seg" id="levelSeg"></div></div>
+        <div class="field"><span>Вариант английского</span>
+          <div class="seg" id="accentSeg"><button data-v="uk">Британский</button><button data-v="us">Американский</button></div>
+        </div>
+        <div class="field"><span>Голос</span>
+          <div class="seg" id="voiceSeg"><button data-v="female">Женский</button><button data-v="male">Мужской</button><button data-v="child">Подросток</button></div>
+        </div>
+        <div class="field"><span>Скорость речи</span>
+          <div class="seg" id="speedSeg"><button data-v="0.7">0,7×</button><button data-v="0.85">0,85×</button><button data-v="1">1×</button><button data-v="1.15">1,15×</button></div>
+        </div>
+        <div class="field"><span>Исправление ошибок</span>
+          <div class="seg" id="modeSeg"><button data-v="quiet">В конце</button><button data-v="gentle">Мягко</button><button data-v="strict">Сразу</button></div>
+        </div>
+        <label class="field"><span>Тема</span>
+          <select id="topic">
+            <option>Свободная беседа</option><option>Знакомство</option><option>В кафе</option><option>В аэропорту</option>
+            <option>Собеседование на работу</option><option>Школа и друзья</option><option>Хобби, фильмы и игры</option><option>Путешествия</option>
+          </select>
+        </label>
+        <label class="check"><input type="checkbox" id="handsFree"> <span>Свободный разговор: микрофон включается сам, когда собеседник договорил</span></label>
+      </div>
+      <button class="btn" id="startBtn">Начать разговор</button>
+    </aside>
+
+    <div class="panel chat">
+      <div class="chat-head">
+        <strong id="chatTitle">Пример диалога</strong>
+        <div class="row">
+          <span class="status" id="status"></span>
+          <button class="btn ghost small" id="reportBtn">Итоги</button>
+          <button class="btn ghost small" id="historyBtn">Мои ошибки</button>
+        </div>
+      </div>
+      <div class="log" id="log" aria-live="polite"></div>
+      <div class="composer">
+        <button class="icon-btn mic" id="micBtn" title="Сказать голосом" aria-label="Сказать голосом">
+          <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"><rect x="9" y="3" width="6" height="11" rx="3"/><path d="M5 11a7 7 0 0 0 14 0M12 18v3"/></svg>
+        </button>
+        <textarea id="input" rows="1" placeholder="Сначала нажмите «Начать разговор»" disabled></textarea>
+        <button class="icon-btn" id="sendBtn" title="Отправить" aria-label="Отправить" disabled>
+          <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M4 12h15M13 6l6 6-6 6"/></svg>
+        </button>
+      </div>
+    </div>
+  </section>
+
+  <section id="view-words" class="words" role="tabpanel" aria-labelledby="tab-words" hidden>
+    <div class="topics" id="topics"></div>
+    <div class="panel card">
+      <div class="count" id="count"></div>
+      <div class="word" id="word"></div>
+      <div class="ipa" id="ipa"></div>
+      <div class="variant" id="variant" hidden></div>
+      <div class="tr" id="tr"></div>
+      <div class="ex" id="ex"></div>
+      <div class="row" style="justify-content:center">
+        <button class="btn ghost" id="listenBtn">Послушать</button>
+        <button class="btn ghost" id="slowBtn">Медленно</button>
+        <button class="btn" id="sayBtn">Произнести</button>
+      </div>
+      <div class="score" id="score"></div>
+      <div class="row" style="justify-content:center">
+        <button class="btn ghost" id="againBtn">Повторить позже</button>
+        <button class="btn ghost" id="knowBtn">Знаю</button>
+      </div>
+    </div>
+    <p class="legend">Транскрипция и написание меняются вместе с вариантом английского в настройках разговора.</p>
+  </section>
+</div>
+
+<dialog id="settingsDlg">
+  <form method="dialog" class="dlg" id="settingsForm">
+    <h2>Настройки</h2>
+    <label class="field"><span>Ключ API Claude</span>
+      <input type="password" id="apiKey" autocomplete="off" placeholder="sk-ant-...">
+    </label>
+    <p class="hint">Создайте ключ на <a href="https://console.anthropic.com/settings/keys" target="_blank" rel="noopener">console.anthropic.com</a>. Он хранится только на этом устройстве, и запросы с ним идут напрямую в Anthropic.</p>
+    <label class="field"><span>Модель собеседника</span>
+      <select id="model">
+        <option value="claude-opus-5-5">Claude Opus 5.5: самые точные правки</option>
+        <option value="claude-haiku-5-5">Claude Haiku 5.5: быстрее и в десятки раз дешевле</option>
+      </select>
+    </label>
+    <div class="row"><button type="button" class="btn ghost small" id="testKey">Проверить ключ</button><span class="status" id="testStatus"></span></div>
+    <label class="field"><span>Имя первого профиля</span><input type="text" id="name0"></label>
+    <label class="field"><span>Имя второго профиля</span><input type="text" id="name1"></label>
+    <div class="row" style="justify-content:flex-end">
+      <button value="cancel" class="btn ghost" formnovalidate>Отмена</button>
+      <button value="save" class="btn" id="saveSettings">Сохранить</button>
+    </div>
+  </form>
+</dialog>
+
+<script type="module" src="app.js"></script>
+<script>
+  if ("serviceWorker" in navigator) addEventListener("load", () => navigator.serviceWorker.register("sw.js").catch(() => {}));
+</script>
+</body>
+</html>
