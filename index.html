@@ -281,7 +281,12 @@ dialog::backdrop { background: rgba(10, 16, 24, 0.45); }
         <option value="claude-haiku-5-5">Claude Haiku 5.5: быстрее и в десятки раз дешевле</option>
       </select>
     </label>
-    <div class="row"><button type="button" class="btn ghost small" id="testKey">Проверить ключ</button><span class="status" id="testStatus"></span></div>
+    <label class="field"><span>Ключ OpenAI для распознавания речи (необязательно)</span>
+      <input type="password" id="openaiKey" autocomplete="off" placeholder="sk-...">
+    </label>
+    <p class="hint">С этим ключом речь распознаёт Whisper: он гораздо лучше понимает акцент. Без ключа распознаёт Chrome. Ключ создаётся на <a href="https://platform.openai.com/api-keys" target="_blank" rel="noopener">platform.openai.com</a>.</p>
+    <div class="row"><button type="button" class="btn ghost small" id="testKey">Проверить ключ Claude</button><button type="button" class="btn ghost small" id="testOpenai">Проверить ключ OpenAI</button></div>
+    <span class="status" id="testStatus"></span>
     <label class="field"><span>Имя первого профиля</span><input type="text" id="name0"></label>
     <label class="field"><span>Имя второго профиля</span><input type="text" id="name1"></label>
     <div class="row" style="justify-content:flex-end">

@@ -9,7 +9,7 @@ const esc = (s) => String(s).replace(/[&<>"]/g, (c) => ({ "&": "&amp;", "<": "&l
 
 // ---------- Profiles and app settings ----------
 const DEFAULT_TALK = { level: "B1", accent: "uk", voice: "female", speed: "1", mode: "gentle", topic: "Свободная беседа", handsFree: false };
-const app = Object.assign({ apiKey: "", model: "claude-opus-5-5", active: 0 }, store.get("app", {}));
+const app = Object.assign({ apiKey: "", openaiKey: "", model: "claude-opus-5-5", active: 0 }, store.get("app", {}));
 let profiles = store.get("profiles", null) || [
   { name: "Папа", talk: { ...DEFAULT_TALK }, known: {}, mistakes: [], wordTopic: "Работа" },
   { name: "Дочка", talk: { ...DEFAULT_TALK, level: "A2", voice: "child", speed: "0.85" }, known: {}, mistakes: [], wordTopic: "Школа" }
@@ -151,7 +151,63 @@ function recognize(onInterim) {
     try { rec.start(); } catch (err) { reject("error"); }
   });
 }
+// ---------- Whisper (optional, needs an OpenAI key) ----------
+let activeRecorder = null;
+async function recordSpeech() {
+  const stream = await navigator.mediaDevices.getUserMedia({ audio: { echoCancellation: true, noiseSuppression: true } });
+  const ctx = new AudioContext();
+  await ctx.resume().catch(() => {});
+  const an = ctx.createAnalyser(); an.fftSize = 1024;
+  ctx.createMediaStreamSource(stream).connect(an);
+  const buf = new Uint8Array(an.fftSize);
+  const type = ["audio/webm;codecs=opus", "audio/webm", "audio/mp4"].find((t) => MediaRecorder.isTypeSupported(t)) || "";
+  const rec = new MediaRecorder(stream, type ? { mimeType: type } : undefined);
+  const chunks = [];
+  rec.ondataavailable = (e) => { if (e.data.size) chunks.push(e.data); };
+  const stopped = new Promise((res) => { rec.onstop = res; });
+  let spoke = false, manual = false, floor = 0;
+  const started = performance.now();
+  let quietSince = started;
+  activeRecorder = { stop() { manual = true; if (rec.state !== "inactive") rec.stop(); }, get state() { return rec.state; } };
+  rec.start(250);
+  // Stop by itself after 1.8 s of quiet once speech has begun, or when nothing is said.
+  const timer = setInterval(() => {
+    an.getByteTimeDomainData(buf);
+    let peak = 0;
+    for (const v of buf) peak = Math.max(peak, Math.abs(v - 128));
+    const now = performance.now();
+    // The first 0.4 s measure the room's noise; speech is anything well above it.
+    if (now - started < 400) { floor = Math.max(floor, peak); return; }
+    if (peak > Math.max(8, floor * 2.5)) { spoke = true; quietSince = now; }
+    if ((spoke && now - quietSince > 1800) || now - started > 30000 || (!spoke && now - started > 8000)) {
+      if (rec.state !== "inactive") rec.stop();
+    }
+  }, 100);
+  await stopped;
+  clearInterval(timer);
+  stream.getTracks().forEach((t) => t.stop());
+  ctx.close();
+  activeRecorder = null;
+  if (!spoke && !manual) throw "no-speech";
+  return new Blob(chunks, { type: rec.mimeType || "audio/webm" });
+}
+async function transcribe(blob, key) {
+  const fd = new FormData();
+  fd.append("file", blob, blob.type.includes("mp4") ? "speech.m4a" : "speech.webm");
+  fd.append("model", "whisper-1");
+  fd.append("language", "en");
+  // Whisper copies the style of its prompt; a learner-like sample keeps grammar mistakes as spoken.
+  fd.append("prompt", "Um, yesterday I go to the shop and buyed some bread. My friend don't like it.");
+  const res = await fetch("https://api.openai.com/v1/audio/transcriptions", { method: "POST", headers: { Authorization: "Bearer " + key }, body: fd });
+  if (!res.ok) throw res.status === 401 ? "openai-key" : res.status === 429 ? "openai-limit" : "openai-error";
+  return String((await res.json()).text || "").trim();
+}
+
 function micError(code) {
+  if (code && typeof code === "object") code = code.name === "NotAllowedError" ? "not-allowed" : "error";
+  if (code === "openai-key") return "Ключ OpenAI не подошёл. Проверьте его в настройках.";
+  if (code === "openai-limit") return "OpenAI не принял запрос: проверьте баланс на platform.openai.com или подождите минуту.";
+  if (code === "openai-error") return "Не получилось распознать речь через Whisper. Попробуйте ещё раз.";
   if (code === "no-speech") return "Ничего не услышал. Нажмите на микрофон и скажите ещё раз.";
   if (code === "aborted") return "";
   if (code === "unsupported") return "Этот браузер не распознаёт речь. Откройте приложение в Chrome.";
@@ -332,6 +388,7 @@ function updateComposer() {
 function stopConversation() {
   if (ctl) ctl.abort();
   if (activeRec) try { activeRec.abort(); } catch (e) {}
+  if (activeRecorder) try { activeRecorder.stop(); } catch (e) {}
   if (synth) synth.cancel();
   live = false; busy = false; messages = EXAMPLE.slice(); turns = [];
   $("chatTitle").textContent = "Пример диалога"; $("startBtn").textContent = "Начать разговор";
@@ -382,7 +439,14 @@ async function listen() {
   const base = typed ? typed + " " : "";
   $("micBtn").classList.add("rec"); $("avatarBox").classList.add("listening"); setStatus("Слушаю… Нажмите микрофон ещё раз, чтобы закончить");
   try {
-    const alts = await recognize((t) => { $("input").value = base + t; });
+    let alts;
+    if (app.openaiKey) {
+      const blob = await recordSpeech();
+      setStatus("Распознаю…");
+      const text = await transcribe(blob, app.openaiKey);
+      if (!text) throw "no-speech";
+      alts = [{ text, conf: 1 }];
+    } else alts = await recognize((t) => { $("input").value = base + t; });
     $("input").value = base + alts[0].text;
     updateSendReady();
     if (S().handsFree) { setStatus(""); send(); }
@@ -391,7 +455,10 @@ async function listen() {
   listening = false;
   $("micBtn").classList.remove("rec"); $("avatarBox").classList.remove("listening");
 }
-$("micBtn").onclick = () => { if (listening && activeRec) { try { activeRec.stop(); } catch (e) {} } else listen(); };
+$("micBtn").onclick = () => {
+  if (!listening) return listen();
+  try { if (activeRecorder && activeRecorder.state !== "inactive") activeRecorder.stop(); else if (activeRec) activeRec.stop(); } catch (e) {}
+};
 
 function plural(n, one, few, many) { const a = n % 10, b = n % 100; return a === 1 && b !== 11 ? one : a >= 2 && a <= 4 && (b < 12 || b > 14) ? few : many; }
 $("reportBtn").onclick = () => {
@@ -410,7 +477,8 @@ $("historyBtn").onclick = () => {
 
 // ---------- Settings dialog ----------
 function openSettings() {
-  $("apiKey").value = app.apiKey; $("model").value = app.model;
+  $("apiKey").value = app.apiKey; $("model").value = app.model; $("openaiKey").value = app.openaiKey;
+  $("testOpenai").textContent = "Проверить ключ OpenAI";
   $("name0").value = profiles[0].name; $("name1").value = profiles[1].name;
   $("testStatus").textContent = "";
   $("settingsDlg").showModal();
@@ -419,7 +487,7 @@ $("settingsBtn").onclick = openSettings;
 $("bannerBtn").onclick = openSettings;
 $("settingsDlg").addEventListener("close", () => {
   if ($("settingsDlg").returnValue !== "save") return;
-  app.apiKey = $("apiKey").value.trim(); app.model = $("model").value; saveApp();
+  app.apiKey = $("apiKey").value.trim(); app.model = $("model").value; app.openaiKey = $("openaiKey").value.trim(); saveApp();
   profiles[0].name = $("name0").value.trim() || profiles[0].name;
   profiles[1].name = $("name1").value.trim() || profiles[1].name;
   saveProfiles(); renderProfiles(); updateBanner();
@@ -433,6 +501,15 @@ $("testKey").onclick = async () => {
     await c.messages.create({ model: $("model").value, max_tokens: 16, messages: [{ role: "user", content: "Say OK." }] });
     $("testStatus").textContent = "Ключ работает";
   } catch (e) { $("testStatus").textContent = errorText(e); }
+};
+$("testOpenai").onclick = async () => {
+  const key = $("openaiKey").value.trim();
+  if (!key) { $("testStatus").textContent = "Вставьте ключ OpenAI"; return; }
+  $("testStatus").textContent = "Проверяю…";
+  try {
+    const res = await fetch("https://api.openai.com/v1/models", { headers: { Authorization: "Bearer " + key } });
+    $("testStatus").textContent = res.ok ? "Ключ OpenAI работает" : res.status === 401 ? "Ключ OpenAI не подошёл" : `OpenAI ответил ошибкой (${res.status})`;
+  } catch (e) { $("testStatus").textContent = "Нет связи с OpenAI. Проверьте интернет."; }
 };
 function updateBanner() { $("keyBanner").hidden = !!app.apiKey; }
 
